@@ -1,13 +1,6 @@
 # -*- coding: utf-8 -*-
 # python3
 #
-# add words from POMS using wordlist_JP.
-#
-# ref:
-#   WordList_JP: http://compling.hss.ntu.edu.sg/wnja/
-#   python3: http://sucrose.hatenablog.com/entry/20120305/p1
-# 
-from __future__ import unicode_literals  # <-文字列を全てunicodeとして扱う。3系では必要なし
 import sqlite3
 import sys
 from collections import namedtuple
@@ -18,38 +11,36 @@ import codecs
 conn = sqlite3.connect("./wnjpn.db")
 
 # 単語をwordテーブルから探す
-# ex. getWords(word=楽しい) 
-# -> [Word(wordid=161281, lang='jpn', lemma='楽しい', pron=None, pos='a')]
 Word = namedtuple('Word', 'wordid lang lemma pron pos') 
 def getWords(lemma):
-  cur = conn.execute("select * from word where lemma=?", (lemma,))
-  return [Word(*row) for row in cur]
+    cur = conn.execute("select * from word where lemma=?", (lemma,))
+    return [Word(*row) for row in cur]
 
 # senseテーブルからwordが属するsynsetを抽出する
 Sense = namedtuple('Sense', 'synset wordid lang rank lexid freq src')
 def getSenses(word):
-  cur = conn.execute("select * from sense where wordid=?", (word.wordid,))
-  return [Sense(*row) for row in cur]
+    cur = conn.execute("select * from sense where wordid=?", (word.wordid,))
+    return [Sense(*row) for row in cur]
 
 Synset = namedtuple('Synset', 'synset pos name src')
 def getSynset(synset):
-  cur = conn.execute("select * from synset where synset=?", (synset,))
-  return Synset(*cur.fetchone())
+    cur = conn.execute("select * from synset where synset=?", (synset,))
+    return Synset(*cur.fetchone())
 
 def getWordsFromSynset(synset, lang):
-  cur = conn.execute("select word.* from sense, word where synset=? and word.lang=? and sense.wordid = word.wordid;", (synset,lang))
-  return [Word(*row) for row in cur]
+    cur = conn.execute("select word.* from sense, word where synset=? and word.lang=? and sense.wordid = word.wordid;", (synset,lang))
+    return [Word(*row) for row in cur]
 
 # synonymの取得
 def getWordsFromSenses(sense, lang="jpn"):
-  synonym = {}
-  for s in sense:
-    lemmas = [] # synonymの単語
-    syns = getWordsFromSynset(s.synset, lang)
-    for sy in syns:
-      lemmas.append(sy.lemma)
-    synonym[getSynset(s.synset).name] = lemmas
-  return synonym
+    synonym = {}
+    for s in sense:
+        lemmas = [] # synonymの単語
+        syns = getWordsFromSynset(s.synset, lang)
+        for sy in syns:
+            lemmas.append(sy.lemma)
+            synonym[getSynset(s.synset).name] = lemmas
+    return synonym
 
 # 同義語を取得する
 def getSynonym(word):
@@ -72,35 +63,39 @@ def getAllwords():
         Words.append(w.lemma)
     return Words
 
-# 追加部分
-# txt保存
+"""Write word vectors to file"""
 def print_word_vecs(wordVectors, outFileName):
-    outFile = open(outFileName, 'w', encoding='utf-8')
-    for values in wordVectors.values():
-        for val in values:
-            outFile.write(str(val)+' ')
-        outFile.write('\n')      
+    sys.stderr.write('\nWriting down the vectors in '+outFileName+'\n')
+    outFile = open(outFileName, 'w')  
+    for word, values in wordVectors.items():
+        # keyを書き込む
+        if len(wordVectors[word]) == 1 and word in values:
+            pass
+        else:
+            outFile.write(word+' ')
+            for val in wordVectors[word]:
+                if val != word:
+                    # valueを書き込む
+                    outFile.write(str(val)+' ')
+                else:
+                    pass
+            outFile.write('\n')      
     outFile.close()
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        synonym = getSynonym(sys.argv[1])
-        pprint(synonym)
-        print_word_vecs(synonym, 'result.txt')
-    else:
-        # 単語リストの取得
-        word_list = getAllwords()
-        # 同義語の取得と保存
-        result = {}
-        for one_word in word_list:
-            value = []
-            synonym = getSynonym(one_word)
-            for eng in list(synonym.keys()):
-                value.extend(synonym[eng])
-            # 重複する単語を削除する（順序を保持する）
-            value_unq = []
-            for x in value:
-                if x not in value_unq:
-                    value_unq.append(x)
-            result[one_word] = value_unq
-        print_word_vecs(result, 'result.txt')
+    # 単語リストの取得
+    word_list = getAllwords()
+    # 同義語の取得と保存
+    result = {}
+    for one_word in word_list:
+        value = []
+        synonym = getSynonym(one_word)
+        for eng in list(synonym.keys()):
+            value.extend(synonym[eng])
+        # 重複する単語を削除する（順序を保持する）
+        value_unq = []
+        for x in value:
+            if x not in value_unq:
+                value_unq.append(x)
+        result[one_word] = value_unq
+    print_word_vecs(result, './result.txt')
